@@ -85,6 +85,8 @@ UPSTASH_REDIS_REST_TOKEN=Upstash_REST_TOKEN
 
 Vercel에서는 초기 비밀번호, 세션 서명키와 Upstash 연결값 중 하나라도 빠지면 요청을 차단합니다. `.env`는 `.gitignore`에 포함되어 GitHub와 Vercel 배포 파일에 올라가지 않습니다.
 
+Upstash 통합이 기존 Vercel KV 호환 이름인 `KV_REST_API_URL`, `KV_REST_API_TOKEN`을 생성한 경우에도 자동으로 인식합니다. 환경변수를 추가하거나 변경한 뒤에는 새 Production 배포가 필요합니다.
+
 ## 흐름
 
 ```
