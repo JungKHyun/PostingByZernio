@@ -19,6 +19,7 @@ import hmac
 import json
 import mimetypes
 import os
+import re
 import secrets
 import time
 import urllib.error
@@ -131,6 +132,8 @@ DRAFT_SYSTEM = """당신은 AX(AI 전환) 전문 컨설턴트의 소셜 미디�
 - 사용자가 제공한 '근거 자료'에 없는 수치, 날짜, 기업명, 인용을 만들어내지 않는다.
 - 근거가 부족하면 그 항목을 비우거나 일반적 서술로 대체한다. 추측을 사실처럼 쓰지 않는다.
 - 과장된 수식어("혁명적", "게임체인저", "충격")를 쓰지 않는다.
+- 별표 강조(**텍스트**), 마크다운 강조 문법과 이모지·이모티콘을 사용하지 않는다.
+- 목록 번호는 1., 2., 3.처럼 일반 숫자와 마침표만 사용한다.
 - 결론은 도입 기업 관점의 실행 함의로 맺는다.
 
 출력은 아래 스키마의 JSON 하나만. 마크다운 코드펜스나 설명 문장을 붙이지 않는다.
@@ -151,9 +154,35 @@ DRAFT_SYSTEM = """당신은 AX(AI 전환) 전문 컨설턴트의 소셜 미디�
     {"head": "", "body": ""}
   ],
   "punchline": "마지막 한 문장. 질문이 어떻게 바뀌는지.",
-  "linkedin": "링크드인 본문. 구조화된 인사이트형. 1500~2500자. 이모지 번호 사용 가능. 해시태그 5개 이내로 마무리.",
+  "linkedin": "링크드인 본문. 구조화된 인사이트형. 1500~2500자. 일반 숫자 목록 사용. 해시태그 5개 이내로 마무리.",
   "facebook": "페이스북 본문. 짧은 요약형. 400~800자. 불릿 3개 + 한 줄 결론."
 }"""
+
+EMOJI_RE = re.compile(
+    "["
+    "\\U0001F000-\\U0001FAFF"
+    "\\U0001FC00-\\U0001FFFF"
+    "\\U00002600-\\U000027BF"
+    "\\U00002300-\\U000023FF"
+    "\\U0001F1E6-\\U0001F1FF"
+    "\\u200d\\ufe0e\\ufe0f\\u20e3"
+    "]+"
+)
+
+
+def clean_generated_text(value):
+    """Gemini 결과 전체에서 마크다운 별표 강조와 이모지를 제거한다."""
+    if isinstance(value, dict):
+        return {key: clean_generated_text(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [clean_generated_text(item) for item in value]
+    if not isinstance(value, str):
+        return value
+    value = value.replace("**", "").replace("__", "")
+    value = EMOJI_RE.sub("", value)
+    value = re.sub(r"[ \t]+\n", "\n", value)
+    value = re.sub(r" {2,}", " ", value)
+    return value.strip()
 
 DRAFT_SCHEMA = {
     "type": "object",
@@ -242,7 +271,7 @@ def draft_copy(topic, sources, tone, date):
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
     try:
-        return json.loads(text)
+        return clean_generated_text(json.loads(text))
     except json.JSONDecodeError as e:
         finish_reason = candidates[0].get("finishReason", "알 수 없음")
         raise RuntimeError(
