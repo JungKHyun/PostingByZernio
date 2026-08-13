@@ -316,6 +316,8 @@ def _auth_config_error():
         missing.append("INITIAL_ADMIN_PASSWORD")
     if not SESSION_SECRET:
         missing.append("SESSION_SECRET")
+    elif len(SESSION_SECRET) < 8:
+        missing.append("SESSION_SECRET(8자 이상)")
     if os.environ.get("VERCEL") and not (UPSTASH_URL and UPSTASH_TOKEN):
         missing.extend(["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"])
     return ", ".join(dict.fromkeys(missing))
@@ -459,8 +461,8 @@ def change_password():
     if request.method == "POST":
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
-        if len(password) < 12:
-            error = "새 비밀번호는 12자 이상이어야 합니다."
+        if len(password) < 8:
+            error = "새 비밀번호는 8자 이상이어야 합니다."
         elif password != confirm:
             error = "새 비밀번호 확인이 일치하지 않습니다."
         elif hmac.compare_digest(password, INITIAL_ADMIN_PASSWORD):
@@ -471,8 +473,8 @@ def change_password():
                 return _set_session(redirect(url_for("index")), must_change=False)
             except Exception:
                 error = "새 비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도하세요."
-    fields = """<label for="password">새 비밀번호</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required>
-<label for="confirm">새 비밀번호 확인</label><input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="12" required>"""
+    fields = """<label for="password">새 비밀번호</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+<label for="confirm">새 비밀번호 확인</label><input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required>"""
     return render_template_string(
         LOGIN_PAGE, title="비밀번호 변경", note="최초 로그인입니다. 계속하려면 초기 비밀번호를 변경하세요.",
         error=error, fields=fields, button="비밀번호 변경",

@@ -46,7 +46,7 @@ ChatGPT Desktop 플러그인에 저장한 키는 이 로컬 Python 프로세스�
 
 브라우저에서 `http://127.0.0.1:8787`. 파이썬 3.9 이상이면 됩니다.
 
-관리자 아이디는 `admin` 한 명으로 고정됩니다. `INITIAL_ADMIN_PASSWORD`로 처음 로그인하면 즉시 12자 이상의 새 비밀번호를 설정해야 합니다. 로컬에서 변경한 비밀번호는 Git에서 제외되는 `data/admin-password.json`에 해시로 저장됩니다.
+관리자 아이디는 `admin` 한 명으로 고정됩니다. `INITIAL_ADMIN_PASSWORD`로 처음 로그인하면 즉시 8자 이상의 새 비밀번호를 설정해야 합니다. 로컬에서 변경한 비밀번호는 Git에서 제외되는 `data/admin-password.json`에 해시로 저장됩니다.
 
 **휴대폰에서 쓰려면** — 같은 와이파이에서 `server.py` 마지막의 `"127.0.0.1"`을 `"0.0.0.0"`으로 바꾸고 `http://<맥/PC의 로컬 IP>:8787` 로 접속하세요. 다만 그 순간 같은 네트워크의 다른 기기도 접근할 수 있으니, 신뢰하는 네트워크에서만 하세요.
 
@@ -74,14 +74,14 @@ ZERNIO_API_KEY=실제_Zernio_키
 GEMINI_API_KEY=실제_Gemini_키
 GEMINI_MODEL=gemini-2.5-flash
 INITIAL_ADMIN_PASSWORD=초기_관리자_비밀번호
-SESSION_SECRET=64자_이상의_임의_문자열
+SESSION_SECRET=8자_이상의_임의_문자열
 UPSTASH_REDIS_REST_URL=Upstash_REST_URL
 UPSTASH_REDIS_REST_TOKEN=Upstash_REST_TOKEN
 ```
 
 6. Production, Preview, Development 환경에 필요한 값을 적용한 뒤 배포합니다.
 
-배포 후 관리자 아이디 `admin`과 초기 비밀번호로 로그인하면 비밀번호 변경 화면으로만 이동합니다. 변경을 완료해야 게시 화면에 들어갈 수 있습니다. 새 비밀번호는 PBKDF2-SHA256 해시로만 저장되며 세션은 12시간 유지됩니다.
+배포 후 관리자 아이디 `admin`과 초기 비밀번호로 로그인하면 비밀번호 변경 화면으로만 이동합니다. 변경을 완료해야 게시 화면에 들어갈 수 있습니다. 새 비밀번호는 PBKDF2-SHA256 해시로만 저장되며 세션은 12시간 유지됩니다. `SESSION_SECRET`은 최소 8자이지만 세션 보안을 위해 32자 이상의 무작위 값을 권장합니다.
 
 Vercel에서는 초기 비밀번호, 세션 서명키와 Upstash 연결값 중 하나라도 빠지면 요청을 차단합니다. `.env`는 `.gitignore`에 포함되어 GitHub와 Vercel 배포 파일에 올라가지 않습니다.
 
