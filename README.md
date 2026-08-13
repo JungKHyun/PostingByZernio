@@ -22,8 +22,10 @@ Copy-Item .env.example .env
 ZERNIO_API_KEY=실제_Zernio_키
 GEMINI_API_KEY=실제_Gemini_키
 GEMINI_MODEL=gemini-2.5-flash
-SITE_USERNAME=사이트_접속_아이디
-SITE_PASSWORD=충분히_긴_사이트_비밀번호
+INITIAL_ADMIN_PASSWORD=초기_관리자_비밀번호
+SESSION_SECRET=충분히_긴_임의_문자열
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 PORT=8787
 ```
 
@@ -44,7 +46,7 @@ ChatGPT Desktop 플러그인에 저장한 키는 이 로컬 Python 프로세스�
 
 브라우저에서 `http://127.0.0.1:8787`. 파이썬 3.9 이상이면 됩니다.
 
-`SITE_USERNAME`과 `SITE_PASSWORD`를 모두 비워두면 로컬에서는 로그인 없이 접속할 수 있습니다. 하나라도 설정하면 브라우저의 기본 인증 로그인 창이 나타납니다.
+관리자 아이디는 `admin` 한 명으로 고정됩니다. `INITIAL_ADMIN_PASSWORD`로 처음 로그인하면 즉시 12자 이상의 새 비밀번호를 설정해야 합니다. 로컬에서 변경한 비밀번호는 Git에서 제외되는 `data/admin-password.json`에 해시로 저장됩니다.
 
 **휴대폰에서 쓰려면** — 같은 와이파이에서 `server.py` 마지막의 `"127.0.0.1"`을 `"0.0.0.0"`으로 바꾸고 `http://<맥/PC의 로컬 IP>:8787` 로 접속하세요. 다만 그 순간 같은 네트워크의 다른 기기도 접근할 수 있으니, 신뢰하는 네트워크에서만 하세요.
 
@@ -64,19 +66,24 @@ ChatGPT Desktop 플러그인에 저장한 키는 이 로컬 Python 프로세스�
 1. GitHub에 이 저장소를 푸시합니다.
 2. Vercel에서 **Add New → Project**를 누르고 GitHub의 `PostingByZernio` 저장소를 가져옵니다.
 3. Framework Preset은 자동 감지를 사용하고 별도의 Build Command나 Output Directory는 입력하지 않습니다.
-4. Vercel 프로젝트의 **Settings → Environment Variables**에 다음 값을 등록합니다.
+4. Vercel Marketplace에서 **Upstash Redis**를 프로젝트에 연결합니다. Vercel 서버리스의 로컬 파일은 영구 저장되지 않기 때문에 변경된 관리자 비밀번호를 Redis에 저장합니다.
+5. Vercel 프로젝트의 **Settings → Environment Variables**에 다음 값을 등록합니다. Upstash 연결 시 Redis 관련 두 값은 자동으로 추가될 수 있습니다.
 
 ```text
 ZERNIO_API_KEY=실제_Zernio_키
 GEMINI_API_KEY=실제_Gemini_키
 GEMINI_MODEL=gemini-2.5-flash
-SITE_USERNAME=사이트_접속_아이디
-SITE_PASSWORD=충분히_긴_사이트_비밀번호
+INITIAL_ADMIN_PASSWORD=초기_관리자_비밀번호
+SESSION_SECRET=64자_이상의_임의_문자열
+UPSTASH_REDIS_REST_URL=Upstash_REST_URL
+UPSTASH_REDIS_REST_TOKEN=Upstash_REST_TOKEN
 ```
 
-5. Production, Preview, Development 환경에 필요한 값을 적용한 뒤 배포합니다.
+6. Production, Preview, Development 환경에 필요한 값을 적용한 뒤 배포합니다.
 
-Vercel에서는 `SITE_USERNAME`과 `SITE_PASSWORD`가 모두 설정되지 않으면 요청을 차단합니다. Zernio 게시 권한을 보호하기 위한 필수 설정입니다. `.env`는 `.gitignore`에 포함되어 GitHub와 Vercel 배포 파일에 올라가지 않습니다.
+배포 후 관리자 아이디 `admin`과 초기 비밀번호로 로그인하면 비밀번호 변경 화면으로만 이동합니다. 변경을 완료해야 게시 화면에 들어갈 수 있습니다. 새 비밀번호는 PBKDF2-SHA256 해시로만 저장되며 세션은 12시간 유지됩니다.
+
+Vercel에서는 초기 비밀번호, 세션 서명키와 Upstash 연결값 중 하나라도 빠지면 요청을 차단합니다. `.env`는 `.gitignore`에 포함되어 GitHub와 Vercel 배포 파일에 올라가지 않습니다.
 
 ## 흐름
 

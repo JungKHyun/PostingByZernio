@@ -1,5 +1,6 @@
 .env
 .vercel/
 .vscode/
+data/
 __pycache__/
 *.py[cod]

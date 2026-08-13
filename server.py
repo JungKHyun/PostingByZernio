@@ -14,15 +14,21 @@ Zernio Desk — 주제 하나로 Facebook / LinkedIn 게시물을 만들고 발�
 """
 
 import base64
+import hashlib
 import hmac
 import json
 import mimetypes
 import os
+import secrets
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request, send_file
+from flask import (
+    Flask, jsonify, make_response, redirect, render_template_string,
+    request, send_file, url_for,
+)
 
 HERE = Path(__file__).resolve().parent
 
@@ -57,8 +63,13 @@ ZERNIO_KEY = os.environ.get("ZERNIO_API_KEY", "")
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-SITE_USERNAME = os.environ.get("SITE_USERNAME", "")
-SITE_PASSWORD = os.environ.get("SITE_PASSWORD", "")
+ADMIN_USERNAME = "admin"
+INITIAL_ADMIN_PASSWORD = os.environ.get("INITIAL_ADMIN_PASSWORD", "")
+SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
+UPSTASH_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "").rstrip("/")
+UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+AUTH_STORE_KEY = "postingbyzernio:admin-password"
+LOCAL_AUTH_FILE = HERE / "data" / "admin-password.json"
 
 TIMEOUT = 90
 app = Flask(__name__)
@@ -284,27 +295,195 @@ def publish(body):
 
 
 # --------------------------------------------------------------- web app
-def _auth_required():
-    return bool(SITE_USERNAME or SITE_PASSWORD or os.environ.get("VERCEL"))
+LOGIN_PAGE = """<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f7f7f5;color:#17171b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif}
+main{width:min(420px,calc(100% - 36px));margin:12vh auto;background:#fff;border:1px solid #dedee3;border-radius:18px;padding:34px}
+h1{font-size:25px;margin:0 0 8px}.note{color:#6b6d75;font-size:14px;line-height:1.55;margin:0 0 24px}
+label{display:block;font-size:13px;font-weight:700;margin:16px 0 7px}input{width:100%;padding:13px;border:1px solid #d6d6dc;border-radius:10px;font-size:16px}
+button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:10px;background:#17171b;color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+.error{background:#fff0ef;color:#a21d17;padding:11px 13px;border-radius:9px;font-size:13px;margin-bottom:16px}
+</style></head><body><main><h1>{{ title }}</h1><p class="note">{{ note }}</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post">{{ fields|safe }}<button type="submit">{{ button }}</button></form>
+</main></body></html>"""
+
+
+def _auth_config_error():
+    missing = []
+    if not INITIAL_ADMIN_PASSWORD:
+        missing.append("INITIAL_ADMIN_PASSWORD")
+    if not SESSION_SECRET:
+        missing.append("SESSION_SECRET")
+    if os.environ.get("VERCEL") and not (UPSTASH_URL and UPSTASH_TOKEN):
+        missing.extend(["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"])
+    return ", ".join(dict.fromkeys(missing))
+
+
+def _store_get():
+    if UPSTASH_URL and UPSTASH_TOKEN:
+        status, _, body = _req(
+            UPSTASH_URL, "POST",
+            {"Authorization": f"Bearer {UPSTASH_TOKEN}", "Content-Type": "application/json"},
+            json.dumps(["GET", AUTH_STORE_KEY]).encode(), timeout=15,
+        )
+        data = json.loads(body.decode() or "{}")
+        if status >= 400 or data.get("error"):
+            raise RuntimeError(data.get("error") or f"인증 저장소 오류 {status}")
+        return data.get("result")
+    if LOCAL_AUTH_FILE.exists():
+        return LOCAL_AUTH_FILE.read_text(encoding="utf-8")
+    return None
+
+
+def _store_set(value):
+    if UPSTASH_URL and UPSTASH_TOKEN:
+        status, _, body = _req(
+            UPSTASH_URL, "POST",
+            {"Authorization": f"Bearer {UPSTASH_TOKEN}", "Content-Type": "application/json"},
+            json.dumps(["SET", AUTH_STORE_KEY, value]).encode(), timeout=15,
+        )
+        data = json.loads(body.decode() or "{}")
+        if status >= 400 or data.get("error") or data.get("result") != "OK":
+            raise RuntimeError(data.get("error") or f"인증 저장소 오류 {status}")
+        return
+    LOCAL_AUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LOCAL_AUTH_FILE.write_text(value, encoding="utf-8")
+
+
+def _hash_password(password, salt=None):
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 310_000)
+    return f"pbkdf2_sha256$310000${salt.hex()}${digest.hex()}"
+
+
+def _verify_password(password, encoded):
+    try:
+        algorithm, iterations, salt_hex, expected = encoded.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), bytes.fromhex(salt_hex), int(iterations)
+        ).hex()
+        return hmac.compare_digest(digest, expected)
+    except (TypeError, ValueError):
+        return False
+
+
+def _session_token(must_change=False):
+    payload = json.dumps({
+        "u": ADMIN_USERNAME,
+        "exp": int(time.time()) + 60 * 60 * 12,
+        "change": bool(must_change),
+    }, separators=(",", ":")).encode()
+    encoded = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+    signature = hmac.new(SESSION_SECRET.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+    return f"{encoded}.{signature}"
+
+
+def _read_session():
+    token = request.cookies.get("admin_session", "")
+    try:
+        encoded, signature = token.rsplit(".", 1)
+        expected = hmac.new(SESSION_SECRET.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        padding = "=" * (-len(encoded) % 4)
+        data = json.loads(base64.urlsafe_b64decode(encoded + padding))
+        if data.get("u") != ADMIN_USERNAME or int(data.get("exp", 0)) < time.time():
+            return None
+        return data
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _set_session(response, must_change=False):
+    response.set_cookie(
+        "admin_session", _session_token(must_change), max_age=60 * 60 * 12,
+        httponly=True, secure=bool(os.environ.get("VERCEL")), samesite="Strict",
+    )
+    return response
 
 
 @app.before_request
 def require_site_auth():
-    if not _auth_required():
+    if request.endpoint in {"login", "logout"}:
         return None
-    if not SITE_USERNAME or not SITE_PASSWORD:
-        return jsonify({"error": "SITE_USERNAME과 SITE_PASSWORD를 모두 설정하세요."}), 503
-    auth = request.authorization
-    if (
-        auth
-        and hmac.compare_digest(auth.username or "", SITE_USERNAME)
-        and hmac.compare_digest(auth.password or "", SITE_PASSWORD)
-    ):
+    missing = _auth_config_error()
+    if missing:
+        return jsonify({"error": f"인증 환경변수가 필요합니다: {missing}"}), 503
+    session = _read_session()
+    if session and not session.get("change"):
         return None
-    return Response(
-        "로그인이 필요합니다.", 401,
-        {"WWW-Authenticate": 'Basic realm="PostingByZernio"'},
+    if session and session.get("change") and request.endpoint == "change_password":
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "로그인이 필요합니다."}), 401
+    return redirect(url_for("change_password" if session else "login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    missing = _auth_config_error()
+    error = f"서버 설정이 필요합니다: {missing}" if missing else ""
+    if request.method == "POST" and not missing:
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        try:
+            stored = _store_get()
+            valid = (
+                hmac.compare_digest(username, ADMIN_USERNAME)
+                and (_verify_password(password, stored) if stored else hmac.compare_digest(password, INITIAL_ADMIN_PASSWORD))
+            )
+            if valid:
+                target = "change_password" if not stored else "index"
+                return _set_session(redirect(url_for(target)), must_change=not stored)
+            error = "아이디 또는 비밀번호가 올바르지 않습니다."
+        except Exception:
+            error = "인증 저장소에 연결할 수 없습니다. 잠시 후 다시 시도하세요."
+    fields = """<label for="username">관리자 아이디</label><input id="username" name="username" autocomplete="username" required>
+<label for="password">비밀번호</label><input id="password" name="password" type="password" autocomplete="current-password" required>"""
+    return render_template_string(
+        LOGIN_PAGE, title="관리자 로그인", note="등록된 관리자 한 명만 사용할 수 있습니다.",
+        error=error, fields=fields, button="로그인",
+    ), (503 if missing else 200)
+
+
+@app.route("/change-password", methods=["GET", "POST"])
+def change_password():
+    session = _read_session()
+    if not session:
+        return redirect(url_for("login"))
+    error = ""
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+        if len(password) < 12:
+            error = "새 비밀번호는 12자 이상이어야 합니다."
+        elif password != confirm:
+            error = "새 비밀번호 확인이 일치하지 않습니다."
+        elif hmac.compare_digest(password, INITIAL_ADMIN_PASSWORD):
+            error = "초기 비밀번호와 다른 비밀번호를 사용하세요."
+        else:
+            try:
+                _store_set(_hash_password(password))
+                return _set_session(redirect(url_for("index")), must_change=False)
+            except Exception:
+                error = "새 비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도하세요."
+    fields = """<label for="password">새 비밀번호</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required>
+<label for="confirm">새 비밀번호 확인</label><input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="12" required>"""
+    return render_template_string(
+        LOGIN_PAGE, title="비밀번호 변경", note="최초 로그인입니다. 계속하려면 초기 비밀번호를 변경하세요.",
+        error=error, fields=fields, button="비밀번호 변경",
     )
+
+
+@app.get("/logout")
+def logout():
+    response = redirect(url_for("login"))
+    response.delete_cookie("admin_session")
+    return response
 
 
 @app.after_request
