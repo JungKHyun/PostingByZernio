@@ -1,0 +1,5 @@
+.env
+.vercel/
+.vscode/
+__pycache__/
+*.py[cod]

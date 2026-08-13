@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16161A">
+<title>Zernio Desk</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+:root{
+  --paper:#FCFCFA; --ink:#16161A; --gray:#6B6D75; --faint:#9A9CA4;
+  --rule:#E2E2E6; --card:#F2F2F4;
+  --signal:#B3261E; --slug:#A87400;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --pad:20px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:16px; line-height:1.55; letter-spacing:-.01em;
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));
+}
+
+/* ---------- slugline: 이 페이지의 시그니처. 항상 진짜 상태를 표시한다 ---------- */
+.slug{
+  position:sticky; top:0; z-index:40;
+  background:var(--ink); color:#F4F4F2;
+  font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; white-space:nowrap; overflow:hidden;
+  padding:calc(9px + env(safe-area-inset-top)) var(--pad) 9px;
+  display:flex; gap:14px; align-items:center;
+}
+.slug b{font-weight:600; color:#fff}
+.slug .sep{color:#55565C}
+.slug .push{margin-left:auto; color:#B9BAC0}
+.slug.live{background:var(--signal)}
+.slug.live .sep{color:#E39A95}
+.slug.busy::after{
+  content:""; position:absolute; left:0; bottom:0; height:2px; width:36%;
+  background:#fff; animation:scan 1.1s linear infinite;
+}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(380%)}}
+@media (prefers-reduced-motion:reduce){.slug.busy::after{animation:none;width:100%;opacity:.4}}
+
+/* ---------- steps ---------- */
+main{max-width:720px;margin:0 auto;padding:0 var(--pad)}
+section{padding:30px 0; border-bottom:1px solid var(--rule)}
+section:last-of-type{border-bottom:0}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--faint); display:flex; align-items:center; gap:9px; margin-bottom:12px;
+}
+.eyebrow i{font-style:normal;color:var(--signal);font-weight:600}
+h2{font-size:23px; font-weight:800; margin:0 0 6px; letter-spacing:-.03em}
+.note{color:var(--gray); font-size:14px; margin:0 0 18px}
+
+label{display:block; font-size:13px; font-weight:600; color:var(--gray); margin:16px 0 7px}
+input[type=text],input[type=datetime-local],textarea,select{
+  width:100%; font-family:var(--sans); font-size:16px; color:var(--ink);
+  background:#fff; border:1px solid var(--rule); border-radius:10px;
+  padding:13px 14px; outline:none; transition:border-color .15s;
+}
+textarea{resize:vertical; line-height:1.6}
+input:focus,textarea:focus,select:focus{border-color:var(--ink)}
+input:focus-visible,textarea:focus-visible,button:focus-visible,select:focus-visible{
+  outline:2px solid var(--signal); outline-offset:2px
+}
+.seg{display:flex; gap:8px; flex-wrap:wrap}
+.seg button{
+  flex:1 1 auto; min-height:44px; padding:0 14px; font-size:14px; font-weight:600;
+  font-family:var(--sans); background:#fff; color:var(--gray);
+  border:1px solid var(--rule); border-radius:10px; cursor:pointer;
+}
+.seg button[aria-pressed=true]{background:var(--ink); color:#fff; border-color:var(--ink)}
+
+button.act{
+  width:100%; min-height:52px; font-size:16px; font-weight:700; font-family:var(--sans);
+  border-radius:12px; border:1px solid var(--ink); background:var(--ink); color:#fff; cursor:pointer;
+}
+button.act.ghost{background:#fff; color:var(--ink)}
+button.act:disabled{opacity:.4; cursor:not-allowed}
+
+/* ---------- copy tabs ---------- */
+.tabs{display:flex; border-bottom:1px solid var(--rule); margin-bottom:2px}
+.tabs button{
+  flex:1; min-height:46px; background:none; border:0; border-bottom:2px solid transparent;
+  font-family:var(--sans); font-size:15px; font-weight:700; color:var(--faint); cursor:pointer;
+}
+.tabs button[aria-selected=true]{color:var(--ink); border-bottom-color:var(--signal)}
+.count{
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; color:var(--faint);
+  display:flex; justify-content:space-between; padding:8px 2px 0;
+}
+.count.over{color:var(--signal); font-weight:600}
+
+/* ---------- image rail ---------- */
+.rail{
+  display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory;
+  margin:0 calc(var(--pad) * -1); padding:4px var(--pad) 12px;
+  -webkit-overflow-scrolling:touch; scrollbar-width:none;
+}
+.rail::-webkit-scrollbar{display:none}
+.shot{flex:0 0 78%; max-width:320px; scroll-snap-align:center}
+.shot canvas{
+  width:100%; aspect-ratio:1/1; display:block; border:1px solid var(--rule); border-radius:12px; background:#fff;
+}
+.shot .cap{
+  font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--faint); display:flex; justify-content:space-between; align-items:center; padding:8px 2px 0;
+}
+.shot .cap button{
+  background:none;border:0;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  color:var(--ink);text-decoration:underline;cursor:pointer;padding:4px
+}
+
+/* ---------- accounts ---------- */
+.acct{
+  display:flex; align-items:center; gap:13px; padding:15px 14px; margin-bottom:10px;
+  border:1px solid var(--rule); border-radius:12px; background:#fff; cursor:pointer;
+}
+.acct[data-on=true]{border-color:var(--ink); background:#fff}
+.acct input{width:20px;height:20px;accent-color:var(--ink);flex:0 0 auto;margin:0}
+.acct .who{flex:1;min-width:0}
+.acct .p{font-weight:700;font-size:15px}
+.acct .n{font-family:var(--mono);font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.warn{
+  background:#FDF6E7; border:1px solid #EBD9A8; border-radius:10px;
+  padding:12px 14px; font-size:13px; color:#6A5310; margin:14px 0 0
+}
+.err{background:#FDEDEC;border:1px solid #F0C4C0;color:#8A241D}
+.ok{background:#EEF6EF;border:1px solid #C3DEC8;color:#26562F}
+
+/* ---------- sticky bar ---------- */
+.bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:50;
+  background:rgba(252,252,250,.94); backdrop-filter:blur(12px);
+  border-top:1px solid var(--rule);
+  padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom));
+}
+.bar .inner{max-width:720px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.bar .state{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint);flex:0 0 auto;text-transform:uppercase}
+.bar button{flex:1}
+.hide{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="slug" id="slug">
+  <b id="sTopic">주제 없음</b>
+  <span class="sep">/</span><span id="sDate">—</span>
+  <span class="sep">/</span><span id="sTargets">FB· LI</span>
+  <span class="push" id="sState">대기</span>
+</div>
+
+<main>
+
+<!-- 1 ------------------------------------------------------------------ -->
+<section>
+  <div class="eyebrow"><i>01</i> 입력</div>
+  <h2>무엇에 대해 쓸까요</h2>
+  <p class="note">근거 자료에 있는 사실만 사용해 초안을 씁니다. 자료를 비우면 수치와 고유명사 없이 일반적인 글이 나옵니다.</p>
+
+  <label for="topic">주제</label>
+  <input type="text" id="topic" placeholder="예: 오픈웨이트 모델이 온프레미스 도입 장벽을 낮춘다">
+
+  <label for="sources">근거 자료 <span style="font-weight:400;color:var(--faint)">— 기사 요약, 수치, 출처 URL</span></label>
+  <textarea id="sources" rows="7" placeholder="붙여넣으세요. 여기 없는 숫자나 회사 이름은 초안에 쓰지 않습니다.&#10;&#10;예)&#10;TSMC 7월 매출 NT$4,675.8억, 전년비 +45% (Reuters)&#10;인텔 보통주 공모 150억 달러 (Barron's)"></textarea>
+
+  <label for="pubdate">날짜</label>
+  <input type="text" id="pubdate" placeholder="2026.08.11">
+
+  <label>톤</label>
+  <div class="seg" id="tone">
+    <button type="button" data-v="분석적" aria-pressed="true">분석적</button>
+    <button type="button" data-v="실무 조언형" aria-pressed="false">실무 조언형</button>
+    <button type="button" data-v="간결한 브리핑" aria-pressed="false">간결한 브리핑</button>
+  </div>
+
+  <div style="height:20px"></div>
+  <button class="act" id="btnDraft">초안 만들기</button>
+  <div id="draftMsg"></div>
+</section>
+
+<!-- 2 ------------------------------------------------------------------ -->
+<section>
+  <div class="eyebrow"><i>02</i> 본문</div>
+  <h2>플랫폼별로 다르게</h2>
+  <p class="note">링크드인은 구조화된 인사이트, 페이스북은 짧은 요약. 여기서 직접 고쳐도 됩니다.</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabLi" aria-selected="true">LinkedIn</button>
+    <button role="tab" id="tabFb" aria-selected="false">Facebook</button>
+  </div>
+  <textarea id="copyLi" rows="14" placeholder="링크드인 본문"></textarea>
+  <textarea id="copyFb" rows="14" class="hide" placeholder="페이스북 본문"></textarea>
+  <div class="count" id="counter"><span id="cLeft">0자</span><span id="cRight">한도 3,000</span></div>
+</section>
+
+<!-- 3 ------------------------------------------------------------------ -->
+<section>
+  <div class="eyebrow"><i>03</i> 이미지</div>
+  <h2>정사각 1080 × 1080</h2>
+  <p class="note">모바일 피드에서 잘리지 않는 비율입니다. 문구를 바꾸면 바로 다시 그려집니다.</p>
+
+  <div class="rail" id="rail">
+    <div class="shot"><canvas id="cv0" width="1080" height="1080"></canvas>
+      <div class="cap"><span>01 커버</span><button data-dl="0">내려받기</button></div></div>
+    <div class="shot"><canvas id="cv1" width="1080" height="1080"></canvas>
+      <div class="cap"><span>02 수치</span><button data-dl="1">내려받기</button></div></div>
+    <div class="shot"><canvas id="cv2" width="1080" height="1080"></canvas>
+      <div class="cap"><span>03 시사점</span><button data-dl="2">내려받기</button></div></div>
+  </div>
+
+  <details style="margin-top:8px">
+    <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--gray);padding:10px 0">이미지 문구 편집</summary>
+    <label for="iTitle">제목 (줄바꿈으로 행 구분, 최대 3행)</label>
+    <textarea id="iTitle" rows="3"></textarea>
+    <label for="iSub">부제</label>
+    <input type="text" id="iSub">
+    <label for="iKicker">슬러그</label>
+    <input type="text" id="iKicker">
+    <label for="iChips">키워드 (쉼표로 구분, 최대 4개)</label>
+    <input type="text" id="iChips">
+    <label for="iFigs">수치 3줄 — 분류 | 값 | 설명</label>
+    <textarea id="iFigs" rows="3" placeholder="반도체 수요 | +45% | TSMC 7월 매출 전년비"></textarea>
+    <label for="iIns">시사점 3줄 — 소제목 | 설명</label>
+    <textarea id="iIns" rows="3" placeholder="공급망 | 병목이 칩에서 전력으로 이동"></textarea>
+    <label for="iPunch">마무리 한 문장</label>
+    <input type="text" id="iPunch">
+    <label for="iSrc">출처 표기</label>
+    <input type="text" id="iSrc" placeholder="SOURCE  Reuters / WSJ">
+  </details>
+</section>
+
+<!-- 4 ------------------------------------------------------------------ -->
+<section>
+  <div class="eyebrow"><i>04</i> 발행</div>
+  <h2>어디로 보낼까요</h2>
+  <p class="note">Zernio에 연결된 계정만 보입니다.</p>
+
+  <div id="accts"><p class="note" style="font-family:var(--mono);font-size:12px">계정 불러오는 중…</p></div>
+  <button class="act ghost" id="btnAccts" style="margin-top:4px">계정 다시 불러오기</button>
+
+  <label style="margin-top:24px">발행 방식</label>
+  <div class="seg" id="mode">
+    <button type="button" data-v="draft" aria-pressed="true">초안 저장</button>
+    <button type="button" data-v="schedule" aria-pressed="false">예약</button>
+    <button type="button" data-v="now" aria-pressed="false">즉시</button>
+  </div>
+
+  <div id="whenWrap" class="hide">
+    <label for="when">예약 시각 (Asia/Seoul)</label>
+    <input type="datetime-local" id="when">
+  </div>
+
+  <div id="pubMsg"></div>
+</section>
+
+</main>
+
+<div class="bar">
+  <div class="inner">
+    <span class="state" id="barState">준비</span>
+    <button class="act" id="btnPublish">Zernio로 보내기</button>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const $ = s => document.querySelector(s);
+const T = { ink:"#16161A", gray:"#6B6D75", faint:"#9A9CA4", rule:"#E2E2E6",
+            card:"#F2F2F4", paper:"#FFFFFF", signal:"#B3261E", slug:"#A87400" };
+
+// ---------------------------------------------------------------- state
+const S = {
+  tone:"분석적", tab:"li", mode:"draft", accounts:[], selected:new Set(), busy:false,
+  spec:{
+    title:["주제를 입력하고","초안을 만들어 보세요"],
+    subtitle:"근거 자료에 있는 사실만으로 글과 이미지를 만듭니다",
+    kicker:"AI BRIEF / DRAFT",
+    chips:["AX","근거 기반","자동 발행"],
+    figures:[
+      {tag:"분류",value:"수치",desc:"초안을 만들면 채워집니다"},
+      {tag:"분류",value:"수치",desc:"직접 입력해도 됩니다"},
+      {tag:"분류",value:"수치",desc:"세 줄까지 들어갑니다"}
+    ],
+    insights:[
+      {head:"첫 번째 시사점",body:"초안을 만들면 여기에 들어갑니다"},
+      {head:"두 번째 시사점",body:"도입 기업 관점으로 씁니다"},
+      {head:"세 번째 시사점",body:"실행 함의로 맺습니다"}
+    ],
+    punchline:"질문이 어떻게 바뀌는가",
+    source:"SOURCE"
+  }
+};
+const LIMIT = { li:3000, fb:63206 };
+
+// ---------------------------------------------------------------- slugline
+function slugline(){
+  const t = ($("#topic").value || "주제 없음").slice(0,22);
+  $("#sTopic").textContent = t;
+  $("#sDate").textContent  = $("#pubdate").value || "—";
+  const sel = [...S.selected].map(id => (S.accounts.find(a=>a.id===id)||{}).platform)
+    .map(p => p==="facebook" ? "FB" : p==="linkedin" ? "LI" : (p||"").toUpperCase());
+  $("#sTargets").textContent = sel.length ? sel.join("·") : "대상 없음";
+  const el = $("#slug");
+  el.classList.toggle("live", S.mode === "now" && S.selected.size > 0);
+  el.classList.toggle("busy", S.busy);
+}
+function setState(txt, busy){
+  S.busy = !!busy;
+  $("#sState").textContent = txt;
+  $("#barState").textContent = txt;
+  slugline();
+}
+function msg(host, text, kind){
+  const el = $(host);
+  el.innerHTML = text ? `<div class="warn ${kind||""}">${text}</div>` : "";
+}
+
+// ---------------------------------------------------------------- canvas text
+function tokens(str){
+  const out=[]; let buf="";
+  for (const ch of str){
+    if (/[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(ch)){
+      if (buf){out.push(buf);buf="";}
+      out.push(ch);
+    } else if (ch === " "){
+      if (buf){out.push(buf);buf="";}
+      out.push(" ");
+    } else buf += ch;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+function wrap(ctx, str, max, maxLines){
+  const lines=[]; let cur="";
+  for (const tk of tokens(str)){
+    const next = cur + tk;
+    if (ctx.measureText(next).width > max && cur.trim()){
+      lines.push(cur.trim()); cur = (tk===" "?"":tk);
+      if (maxLines && lines.length === maxLines) return lines;
+    } else cur = next;
+  }
+  if (cur.trim()) lines.push(cur.trim());
+  return maxLines ? lines.slice(0,maxLines) : lines;
+}
+function put(ctx,str,x,y,max,lh,maxLines){
+  const ls = wrap(ctx,str,max,maxLines);
+  ls.forEach((l,i)=>ctx.fillText(l,x,y+i*lh));
+  return y + ls.length*lh;
+}
+const F = (w,s) => `${w} ${s}px Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+const M = s => `600 ${s}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+
+function base(id){
+  const c = document.getElementById(id), x = c.getContext("2d");
+  x.fillStyle = T.paper; x.fillRect(0,0,1080,1080);
+  x.textBaseline = "top";
+  return x;
+}
+const MG = 88, W = 1080 - MG*2;
+
+// ---------------------------------------------------------------- 01 cover
+function drawCover(){
+  const x = base("cv0"), s = S.spec;
+  x.fillStyle = T.signal; x.fillRect(MG,140,88,6);
+
+  x.font = M(24); x.fillStyle = T.gray;
+  x.fillText((s.kicker||"").toUpperCase().slice(0,44), MG, 182);
+
+  x.fillStyle = T.ink;
+  const lines = (s.title||[]).filter(Boolean).slice(0,3);
+  const size = lines.length >= 3 ? 74 : 86;
+  x.font = F(900,size);
+  let y = 300;
+  lines.forEach(l => { y = put(x,l,MG,y,W,size*1.24,1); });
+
+  x.font = F(300,31); x.fillStyle = T.gray;
+  const subEnd = put(x, s.subtitle||"", MG, y+34, W, 46, 3);
+
+  // chips — 본문 아래에 붙이되 하단 규칙선과 겹치지 않도록 바닥을 정한다
+  x.font = F(500,25);
+  let cx = MG, cy = Math.min(Math.max(subEnd + 76, 700), 806);
+  (s.chips||[]).filter(Boolean).slice(0,4).forEach((label,i)=>{
+    const w = x.measureText(label).width + 44;
+    if (cx + w > 1080 - MG){ cx = MG; cy += 66; }
+    const col = i === 1 ? T.signal : T.ink;
+    x.strokeStyle = col; x.lineWidth = 2;
+    x.beginPath(); x.roundRect(cx, cy, w, 54, 27); x.stroke();
+    x.fillStyle = col; x.fillText(label, cx+22, cy+14);
+    cx += w + 12;
+  });
+
+  x.strokeStyle = T.rule; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(MG,946); x.lineTo(1080-MG,946); x.stroke();
+  x.font = M(20); x.fillStyle = T.faint;
+  x.fillText((s.source||"SOURCE").toUpperCase().slice(0,58), MG, 968);
+}
+
+// ---------------------------------------------------------------- 02 figures
+function drawFigures(){
+  const x = base("cv1"), s = S.spec;
+  x.fillStyle = T.signal; x.fillRect(MG,120,88,6);
+  x.font = M(24); x.fillStyle = T.gray; x.fillText("FIGURES", MG, 160);
+  x.font = F(900,54); x.fillStyle = T.ink;
+  put(x, "숫자로 본 요약", MG, 206, W, 66, 1);
+
+  const rows = (s.figures||[]).slice(0,3);
+  const H = 188, GAP = 20;
+  rows.forEach((f,i)=>{
+    const y = 312 + i*(H+GAP);
+    const col = i === 0 ? T.signal : i === 1 ? T.ink : T.slug;
+    x.fillStyle = T.card; x.fillRect(MG,y,W,H);
+    x.fillStyle = col;    x.fillRect(MG,y,6,H);
+
+    x.font = F(500,24); x.fillStyle = col;
+    x.fillText((f.tag||"").slice(0,18), MG+34, y+26);
+
+    x.font = F(900,62); x.fillStyle = T.ink;
+    put(x, f.value||"", MG+32, y+58, W-320, 66, 1);
+
+    x.font = F(400,23); x.fillStyle = T.gray;
+    put(x, f.desc||"", MG+34, y+134, W-70, 30, 2);
+  });
+
+  x.strokeStyle = T.rule; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(MG,952); x.lineTo(1080-MG,952); x.stroke();
+  x.font = M(20); x.fillStyle = T.faint;
+  x.fillText((s.source||"SOURCE").toUpperCase().slice(0,58), MG, 974);
+}
+
+// ---------------------------------------------------------------- 03 insight
+function drawInsight(){
+  const x = base("cv2"), s = S.spec;
+  x.fillStyle = T.signal; x.fillRect(MG,120,88,6);
+  x.font = M(24); x.fillStyle = T.gray; x.fillText("WHY IT MATTERS", MG, 160);
+  x.font = F(900,54); x.fillStyle = T.ink;
+  put(x, "도입 관점의 시사점", MG, 206, W, 66, 1);
+
+  // 먼저 각 블록의 높이를 재고, 남는 공간을 균등하게 나눈다
+  const items = (s.insights||[]).slice(0,3);
+  const bodyW = W - 60;
+  x.font = F(400,26);
+  const blocks = items.map(it => {
+    const bl = wrap(x, it.body||"", bodyW, 2);
+    return { it, bl, h: 52 + bl.length*36 };
+  });
+  const TOP = 322, BOTTOM = 822;
+  const used = blocks.reduce((a,b) => a + b.h, 0);
+  const gap = Math.min(Math.max((BOTTOM - TOP - used) / Math.max(blocks.length-1,1), 46), 132);
+
+  let y = TOP;
+  blocks.forEach((b,i)=>{
+    const col = i === blocks.length-1 ? T.signal : T.ink;
+    x.fillStyle = col; x.beginPath(); x.arc(MG+7, y+18, 7, 0, 6.284); x.fill();
+
+    x.font = F(800,38); x.fillStyle = T.ink;
+    put(x, b.it.head||"", MG+36, y, W-36, 48, 1);
+
+    x.font = F(400,26); x.fillStyle = T.gray;
+    b.bl.forEach((l,j) => x.fillText(l, MG+36, y+52+j*36));
+
+    y += b.h + gap;
+    if (i < blocks.length-1){
+      x.strokeStyle = T.rule; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(MG+36, y-gap/2); x.lineTo(1080-MG, y-gap/2); x.stroke();
+    }
+  });
+
+  x.fillStyle = T.ink; x.fillRect(MG,858,W,5);
+  x.font = F(800,34); x.fillStyle = T.ink;
+  put(x, s.punchline||"", MG, 892, W, 46, 2);
+}
+
+function redraw(){ try{ drawCover(); drawFigures(); drawInsight(); }catch(e){ console.error(e); } }
+
+// ---------------------------------------------------------------- spec <-> form
+function specToForm(){
+  const s = S.spec;
+  $("#iTitle").value  = (s.title||[]).join("\n");
+  $("#iSub").value    = s.subtitle||"";
+  $("#iKicker").value = s.kicker||"";
+  $("#iChips").value  = (s.chips||[]).join(", ");
+  $("#iFigs").value   = (s.figures||[]).map(f=>[f.tag,f.value,f.desc].join(" | ")).join("\n");
+  $("#iIns").value    = (s.insights||[]).map(i=>[i.head,i.body].join(" | ")).join("\n");
+  $("#iPunch").value  = s.punchline||"";
+  $("#iSrc").value    = s.source||"SOURCE";
+}
+function formToSpec(){
+  const rows = v => v.split("\n").map(l=>l.trim()).filter(Boolean);
+  S.spec.title     = rows($("#iTitle").value).slice(0,3);
+  S.spec.subtitle  = $("#iSub").value;
+  S.spec.kicker    = $("#iKicker").value;
+  S.spec.chips     = $("#iChips").value.split(",").map(s=>s.trim()).filter(Boolean).slice(0,4);
+  S.spec.figures   = rows($("#iFigs").value).slice(0,3).map(l=>{
+    const p = l.split("|").map(s=>s.trim());
+    return {tag:p[0]||"", value:p[1]||"", desc:p[2]||""};
+  });
+  S.spec.insights  = rows($("#iIns").value).slice(0,3).map(l=>{
+    const p = l.split("|").map(s=>s.trim());
+    return {head:p[0]||"", body:p[1]||""};
+  });
+  S.spec.punchline = $("#iPunch").value;
+  S.spec.source    = $("#iSrc").value;
+  redraw();
+}
+
+// ---------------------------------------------------------------- counters
+function counter(){
+  const v = S.tab === "li" ? $("#copyLi").value : $("#copyFb").value;
+  const lim = LIMIT[S.tab];
+  $("#cLeft").textContent  = v.length.toLocaleString() + "자";
+  $("#cRight").textContent = "한도 " + lim.toLocaleString();
+  $("#counter").classList.toggle("over", v.length > lim);
+}
+
+// ---------------------------------------------------------------- accounts
+async function loadAccounts(){
+  const host = $("#accts");
+  host.innerHTML = `<p class="note" style="font-family:var(--mono);font-size:12px">불러오는 중…</p>`;
+  try{
+    const r = await fetch("/api/accounts");
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "계정을 불러오지 못했습니다");
+    S.accounts = (d.accounts||[]).filter(a => ["facebook","linkedin"].includes(a.platform));
+    if (!S.accounts.length){
+      host.innerHTML = `<div class="warn">연결된 Facebook 또는 LinkedIn 계정이 없습니다. Zernio 대시보드에서 계정을 연결한 뒤 다시 불러오세요.</div>`;
+      return;
+    }
+    host.innerHTML = S.accounts.map(a => `
+      <label class="acct" data-on="false">
+        <input type="checkbox" value="${a.id}">
+        <span class="who">
+          <span class="p">${a.platform === "facebook" ? "Facebook" : "LinkedIn"}</span>
+          <span class="n">${a.name || a.id}</span>
+        </span>
+      </label>`).join("");
+    host.querySelectorAll("input").forEach(box => {
+      box.addEventListener("change", () => {
+        box.checked ? S.selected.add(box.value) : S.selected.delete(box.value);
+        box.closest(".acct").dataset.on = box.checked;
+        slugline();
+      });
+    });
+    if (S.accounts.some(a=>a.platform==="facebook")){
+      host.insertAdjacentHTML("beforeend",
+        `<div class="warn">Facebook은 페이지에만 게시됩니다. 개인 타임라인에는 올라가지 않습니다.</div>`);
+    }
+  }catch(e){
+    host.innerHTML = `<div class="warn err">${e.message}<br>서버가 켜져 있고 ZERNIO_API_KEY가 설정됐는지 확인하세요.</div>`;
+  }
+  slugline();
+}
+
+// ---------------------------------------------------------------- draft
+async function draft(){
+  const topic = $("#topic").value.trim();
+  if (!topic){ msg("#draftMsg","주제를 먼저 입력하세요.","err"); $("#topic").focus(); return; }
+  msg("#draftMsg",""); setState("초안 작성 중", true); $("#btnDraft").disabled = true;
+  try{
+    const r = await fetch("/api/copy",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({topic, sources:$("#sources").value, tone:S.tone, date:$("#pubdate").value})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "초안 생성 실패");
+
+    Object.assign(S.spec, {
+      title:d.title||S.spec.title, subtitle:d.subtitle||"", kicker:d.kicker||"",
+      chips:d.chips||[], figures:d.figures||[], insights:d.insights||[],
+      punchline:d.punchline||"", source:S.spec.source
+    });
+    $("#copyLi").value = d.linkedin || "";
+    $("#copyFb").value = d.facebook || "";
+    specToForm(); redraw(); counter();
+    msg("#draftMsg","초안이 준비됐습니다. 본문과 이미지 문구를 확인하고 고치세요.","ok");
+    setState("초안 완료", false);
+  }catch(e){
+    msg("#draftMsg", e.message,"err");
+    setState("초안 실패", false);
+  }finally{ $("#btnDraft").disabled = false; }
+}
+
+// ---------------------------------------------------------------- publish
+function png(id){ return document.getElementById(id).toDataURL("image/png"); }
+
+async function publish(){
+  if (!S.selected.size){ msg("#pubMsg","보낼 계정을 선택하세요.","err"); return; }
+  const li = $("#copyLi").value.trim(), fb = $("#copyFb").value.trim();
+  const targets = [];
+  for (const id of S.selected){
+    const a = S.accounts.find(x=>x.id===id); if (!a) continue;
+    const content = a.platform === "linkedin" ? li : fb;
+    if (!content){ msg("#pubMsg",`${a.platform === "linkedin" ? "LinkedIn" : "Facebook"} 본문이 비어 있습니다.`,"err"); return; }
+    if (a.platform === "linkedin" && content.length > LIMIT.li){
+      msg("#pubMsg",`LinkedIn 본문이 ${LIMIT.li.toLocaleString()}자를 넘습니다.`,"err"); return;
+    }
+    targets.push({platform:a.platform, accountId:a.id, pageId:a.pageId||null, content});
+  }
+  if (S.mode === "schedule" && !$("#when").value){
+    msg("#pubMsg","예약 시각을 입력하세요.","err"); return;
+  }
+  if (S.mode === "now" && !confirm("지금 바로 게시됩니다. 계속할까요?")) return;
+
+  msg("#pubMsg",""); setState("전송 중", true); $("#btnPublish").disabled = true;
+  try{
+    const body = {
+      mode:S.mode, timezone:"Asia/Seoul",
+      slug:(($("#topic").value||"post").replace(/[^\w가-힣]+/g,"-").slice(0,40) || "post").toLowerCase(),
+      images:[png("cv0"),png("cv1"),png("cv2")],
+      targets
+    };
+    if (S.mode === "schedule") body.scheduledFor = $("#when").value + ":00";
+
+    const r = await fetch("/api/publish",{
+      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "발행 실패");
+
+    const label = {draft:"초안으로 저장했습니다", schedule:"예약했습니다", now:"게시했습니다"}[S.mode];
+    const rows = d.results.map(x =>
+      `${x.platform === "linkedin" ? "LinkedIn" : "Facebook"} — ${x.status}` +
+      (x.url ? ` · <a href="${x.url}" target="_blank" rel="noopener">열기</a>` : ` · ${x.id||""}`)
+    ).join("<br>");
+    msg("#pubMsg", `${label}.<br>${rows}`, "ok");
+    setState("완료", false);
+  }catch(e){
+    msg("#pubMsg", e.message, "err");
+    setState("실패", false);
+  }finally{ $("#btnPublish").disabled = false; }
+}
+
+// ---------------------------------------------------------------- wiring
+function segment(sel, key, after){
+  $(sel).addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    $(sel).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    S[key] = b.dataset.v;
+    after && after();
+  });
+}
+segment("#tone","tone");
+segment("#mode","mode", () => { $("#whenWrap").classList.toggle("hide", S.mode !== "schedule"); slugline(); });
+
+$("#tabLi").onclick = () => switchTab("li");
+$("#tabFb").onclick = () => switchTab("fb");
+function switchTab(t){
+  S.tab = t;
+  $("#tabLi").setAttribute("aria-selected", t === "li");
+  $("#tabFb").setAttribute("aria-selected", t === "fb");
+  $("#copyLi").classList.toggle("hide", t !== "li");
+  $("#copyFb").classList.toggle("hide", t !== "fb");
+  counter();
+}
+
+["#copyLi","#copyFb"].forEach(s => $(s).addEventListener("input", counter));
+["#iTitle","#iSub","#iKicker","#iChips","#iFigs","#iIns","#iPunch","#iSrc"]
+  .forEach(s => $(s).addEventListener("input", formToSpec));
+["#topic","#pubdate"].forEach(s => $(s).addEventListener("input", slugline));
+
+$("#rail").addEventListener("click", e => {
+  const b = e.target.closest("[data-dl]"); if (!b) return;
+  const i = b.dataset.dl;
+  const a = document.createElement("a");
+  a.download = `${($("#topic").value||"post").replace(/[^\w가-힣]+/g,"-").slice(0,30)}-0${+i+1}.png`;
+  a.href = png("cv"+i); a.click();
+});
+
+$("#btnDraft").onclick   = draft;
+$("#btnAccts").onclick   = loadAccounts;
+$("#btnPublish").onclick = publish;
+
+// ---------------------------------------------------------------- boot
+(async () => {
+  const d = new Date();
+  $("#pubdate").value = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+  S.spec.kicker = `AI BRIEF / ${$("#pubdate").value}`;
+  specToForm();
+  try{ await document.fonts.load('900 86px Pretendard'); await document.fonts.ready; }catch(e){}
+  redraw(); counter(); slugline();
+  loadAccounts();
+})();
+
+})();
+</script>
+</body>
+</html>
