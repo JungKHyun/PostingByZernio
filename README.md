@@ -2,6 +2,27 @@
 
 주제 하나를 넣으면 → 근거 기반 초안 + 정사각 이미지 3장 → Facebook / LinkedIn 발행까지 한 화면에서.
 
+## 현재 운영 구성 요약
+
+2026년 8월 기준 최종 구성입니다.
+
+| 구분 | 현재 역할과 상태 |
+|---|---|
+| GitHub | 공개 저장소에서 소스코드와 변경 이력을 관리한다. |
+| Vercel | 실제 웹사이트와 Python/Flask API를 호스팅한다. GitHub `main` 푸시 시 자동 배포한다. |
+| Upstash Redis | 최초 로그인 후 변경한 관리자 비밀번호 해시를 영구 저장한다. |
+| Gemini | 근거 자료를 바탕으로 Facebook·LinkedIn 초안과 이미지 문구를 생성한다. |
+| Zernio | 연결 계정 조회, 이미지 업로드, 초안 저장·예약·즉시 게시를 담당한다. |
+
+- GitHub 저장소: <https://github.com/JungKHyun/PostingByZernio>
+- Vercel 프로젝트명: `posting-by-zernio`
+- 예상 기본 서비스 주소: <https://posting-by-zernio.vercel.app>
+- 관리자 계정: `admin` 한 명으로 고정
+- GitHub Pages는 Python 서버를 실행할 수 없으므로 서비스 주소로 사용하지 않는다.
+- `.env`, API 키, 관리자 초기 비밀번호, 세션 서명키와 Redis 토큰은 공개 저장소에 커밋하지 않는다.
+
+Vercel 대시보드에 표시되는 Production Domain이 위 예상 주소와 다르면 대시보드의 주소를 최종 서비스 주소로 사용합니다.
+
 ```
 zernio-desk/
   server.py     로컬 서버. API 키를 들고 Zernio·Gemini를 대신 호출한다. 의존성 없음.
@@ -59,7 +80,7 @@ ChatGPT Desktop 플러그인에 저장한 키는 이 로컬 Python 프로세스�
 
 그래서 키는 서버가 읽는 `.env`에만 존재하고, 브라우저로는 절대 내려가지 않습니다. 서버는 `127.0.0.1`에만 바인딩됩니다.
 
-## GitHub와 Vercel에 배포
+## GitHub와 Vercel 최초 배포
 
 이 프로젝트는 GitHub Pages가 아니라 GitHub 저장소를 Vercel에 연결해 배포합니다. Vercel은 `server.py`의 Flask `app`을 Python Function으로 실행합니다.
 
@@ -86,6 +107,83 @@ UPSTASH_REDIS_REST_TOKEN=Upstash_REST_TOKEN
 Vercel에서는 초기 비밀번호, 세션 서명키와 Upstash 연결값 중 하나라도 빠지면 요청을 차단합니다. `.env`는 `.gitignore`에 포함되어 GitHub와 Vercel 배포 파일에 올라가지 않습니다.
 
 Upstash 통합이 기존 Vercel KV 호환 이름인 `KV_REST_API_URL`, `KV_REST_API_TOKEN`을 생성한 경우에도 자동으로 인식합니다. 환경변수를 추가하거나 변경한 뒤에는 새 Production 배포가 필요합니다.
+
+## 운영할 때 기억할 절차
+
+### 코드 수정 후 배포
+
+```text
+로컬 파일 수정
+→ 테스트
+→ Git commit
+→ GitHub main 브랜치에 push
+→ Vercel이 Production 자동 배포
+→ Deployments에서 Ready 확인
+```
+
+GitHub에 푸시했는데 Vercel 배포가 생성되지 않으면 Vercel 프로젝트의 **Settings → Git**에서 `JungKHyun/PostingByZernio` 저장소와 `main` 브랜치가 연결됐는지 확인합니다.
+
+### 환경변수 변경 후 배포
+
+환경변수를 저장하는 것만으로 기존 배포가 갱신되지는 않습니다.
+
+1. Vercel 프로젝트의 **Settings → Environment Variables**에서 값을 추가하거나 수정합니다.
+2. 해당 변수가 `Production`에 적용되는지 확인합니다.
+3. **Deployments**에서 최신 배포를 `Redeploy`하거나 GitHub `main`에 새 커밋을 푸시합니다.
+4. 새 배포가 `Ready`가 된 뒤 그 배포의 `Visit` 버튼으로 접속합니다.
+5. 문제가 지속되면 시크릿 창이나 `Ctrl+Shift+R`로 확인합니다.
+
+### 현재 필요한 Vercel 환경변수
+
+| 변수 | 용도 |
+|---|---|
+| `ZERNIO_API_KEY` | Zernio 계정 조회와 게시 |
+| `GEMINI_API_KEY` | Gemini 초안 생성 |
+| `GEMINI_MODEL` | 기본값 `gemini-2.5-flash` |
+| `INITIAL_ADMIN_PASSWORD` | 최초 로그인에만 쓰는 초기 비밀번호 |
+| `SESSION_SECRET` | 로그인 세션 쿠키 서명. 최소 8자, 32자 이상 권장 |
+| `UPSTASH_REDIS_REST_URL` | Upstash REST 주소 |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash 쓰기 가능한 REST 토큰 |
+
+Upstash 통합 화면에서 `UPSTASH_REDIS_REST_URL`과 `UPSTASH_REDIS_REST_TOKEN`이 `Production and Preview`로 연결된 상태를 확인했습니다. 통합이 `KV_REST_API_URL`, `KV_REST_API_TOKEN`을 제공해도 코드가 호환 처리합니다.
+
+### 최초 로그인과 비밀번호 변경
+
+1. Vercel Production 주소에 접속합니다.
+2. 아이디 `admin`과 Vercel의 `INITIAL_ADMIN_PASSWORD` 값으로 로그인합니다.
+3. 최초 로그인 시 다른 화면으로 이동할 수 없고 비밀번호 변경 화면이 표시됩니다.
+4. 8자 이상의 새 비밀번호로 변경합니다.
+5. 새 비밀번호는 원문이 아닌 PBKDF2-SHA256 해시로 Upstash에 저장됩니다.
+6. 이후에는 새 비밀번호를 사용합니다. 로그인 세션은 12시간 유지됩니다.
+
+초기 비밀번호의 실제 값은 공개 README에 기록하지 않습니다. 잊었을 때는 Vercel 환경변수만 바꾸어도 이미 Upstash에 저장된 새 비밀번호가 우선되므로 초기화되지 않습니다. 비밀번호를 완전히 초기화하려면 Upstash의 `postingbyzernio:admin-password` 키를 삭제한 뒤 `INITIAL_ADMIN_PASSWORD`를 새 값으로 바꾸고 Production을 재배포해야 합니다.
+
+### GitHub Pages
+
+`https://jungkhyun.github.io/PostingByZernio/`는 정적 `index.html`만 제공하므로 로그인, Gemini, Zernio API가 작동하지 않습니다. Vercel 서비스가 정상이라면 GitHub 저장소의 **Settings → Pages**에서 배포 소스를 비활성화합니다.
+
+### 자주 발생하는 오류
+
+#### 인증 환경변수가 필요하다는 오류
+
+```json
+{"error":"인증 환경변수가 필요합니다: UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN"}
+```
+
+확인 순서:
+
+1. 두 변수가 정확한 이름으로 등록됐는지 확인합니다.
+2. 적용 환경에 `Production`이 포함됐는지 확인합니다.
+3. 변수 등록 이후 새 Production 배포가 생성됐는지 확인합니다.
+4. 최신 `Ready` 배포의 `Visit` 주소로 접속합니다.
+5. Vercel KV 호환 변수만 있다면 `KV_REST_API_URL`, `KV_REST_API_TOKEN`도 코드에서 인식합니다.
+
+#### API 키 관리
+
+- 키가 로그, 화면 공유 또는 터미널 출력에 노출되면 해당 키를 폐기하고 새 키를 발급합니다.
+- 새 키는 로컬 `.env`와 Vercel Environment Variables에 각각 반영합니다.
+- 변경 후 반드시 새 Production 배포를 실행합니다.
+- `.env`가 Git에 추적되지 않는지 `git status --ignored`로 확인합니다.
 
 ## 흐름
 
